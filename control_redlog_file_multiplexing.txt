@@ -1,0 +1,110 @@
+Control File and Redolog File Multiplexing
+Control file and Redolog file contains crucial database information and loss of these files will lead to loss of important data about database. It is recommended to have multiplexed copies of files in different locations.
+
+Control File Multiplexing 
+
+If control file is lost in 9i, database may go for force shutdown, where as database will continue to run, if it is 10g version and above.
+
+
+Control File Multiplexing
+
+Check the database control files
+
+SQL> show parameter control_files 
+Add new control file to below command along with old control files from above command. We will add control03.ctl
+
+/ctrl01/orcl_controlfile
+/ctrl02/orcl_controlfile
+
+copy file from os like cp /u02/prod/control01.ctl /u02/prod/control04.ctl 
+
+alter system switch logfile;
+alter system switch logfile;
+alter system switch logfile;
+alter system switch logfile;
+alter system checkpoint;
+
+shut immediate
+
+startup noumount;
+
+
+SQL> alter system set control_files='/ctrl01/orcl_controlfile/control01.ctl','/ctrl02/orcl_controlfile/control02.ctl' scope=spfile;
+ 
+We need to bounce the database and copy control02.ctl as control03.ctl
+SQL> shutdown immediate
+
+startup mount;
+
+SQL> alter database open;
+
+
+Redolog File Multiplexing
+
+To protect against failure of the redo logs, Oracle allows redo logs to be multiplexed. With multiplexed redo logs two or more identical copies can be placed in separate locations. The log writer process (LGWR) writes the same redo information to each multiplexed log.
+
+
+Multiplexing uses groups of redo log files. A group contains a redo log and all of its multiplexed copies. Each copy or member is identical. 
+
+
+It is required that there are at least two groups and in the case of multiple members per group that all members be the same size. It is recommend but not required that each group has the same number of members.
+
+Check redolog file members
+SQL> select member from v$logfile;
+
+
+To check redolog group info,status and size
+SQL> select group#,members,status,sum(bytes/1024/1024)from v$log group by group#,members,status;
+
+
+To add a redolog file group
+SQL> alter database add logfile group 4('/u01/prod/redo04a.log','/u02/prod/redo04b.log') size 50m;
+
+To add a redolog member
+SQL> alter database add logfile member '/u02/prod/redo01b.log' to group 1;
+
+To drop a redolog group
+SQL> alter database drop logfile group 4;
+
+To drop a redolog member
+SQL> alter database drop logfile member '/u02/prod/redo01b.log';
+
+Rename or Relocate Redolog file, shutdown the DB
+
+SQL> shutdown immediate;
+
+SQL>! cp /u02/prod/redo01.log /u02/prod/redo01a.log
+(If relocating, use the source and destination paths)
+
+SQL> startup mount
+SQL> alter database rename file '/u02/prod/redo01.log' to '/u02/prod/redo01a.log';
+
+SQL> alter database open;
+The server process will update Control File with new redolog location.
+
+**********************************************reference******************************************************
+--------------------------------------------------------------------------------
+/data/datafiles/ORCL/redo03.log
+/data/datafiles/ORCL/redo02.log
+/data/datafiles/ORCL/redo01.log
+
+SQL> alter database rename file '/data/datafiles/ORCL/redo01.log' to '/redo01/orcl/logfiles/redo01.log';
+
+Database altered.
+
+SQL> alter database rename file '/data/datafiles/ORCL/redo02.log' to '/redo01/orcl/logfiles/redo02.log';
+
+Database altered.
+
+SQL> alter database rename file '/data/datafiles/ORCL/redo03.log' to '/redo02/orcl/logfiles/redo03.log';
+
+Database altered.
+
+
+SQL> select member from v$logfile;
+
+MEMBER
+--------------------------------------------------------------------------------
+/redo02/orcl/logfiles/redo03.log
+/redo01/orcl/logfiles/redo02.log
+/redo01/orcl/logfiles/redo01.log
